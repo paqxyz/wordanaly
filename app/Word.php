@@ -6,6 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class Word extends Model
 {
-    public $table = 'word_20170811';
+    public $table = 'word';
     public $timestamps = false;
 }

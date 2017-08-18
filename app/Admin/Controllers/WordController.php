@@ -2,6 +2,7 @@
 
 namespace App\Admin\Controllers;
 
+use App\Jobs\InsertDbJobs;
 use App\Log;
 use App\Site;
 use App\Word;
@@ -45,30 +46,37 @@ class WordController extends Controller
     public function index()
     {
         return Admin::content(function (Content $content) {
-
             $content->header('查询');
             $content->description('比对数据...');
             $content->row(function (Row $row) {
                 $row->column(12, function (Column $column) {
                     $form = new \Encore\Admin\Widgets\Form();
                     $form->select('siteid', '站点')->options(Site::all()->pluck('sitename', 'id'));
-                    $form->select('start', '起始日期')->options(Log::where('siteid', 1)->pluck('d', 'd'));
-                    $form->select('end', '结束日期')->options(Log::where('siteid', 1)->pluck('d', 'd'));
-
+                    $form->select('start', '起始日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->pluck('d', 'd'));
+                    $form->select('end', '结束日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->pluck('d', 'd'));
+                    $form->select('type', '功能')->options([1=>'新增比对']);
                     $form->action('/admin');
                     $column->append($form);
                 });
             });
 
             if (isset($_POST['start']) && isset($_POST['end'])) {
-                $headers = ['ID', '热词', '排名'];
+                $headers = ['ID', '热词', '排名', '链接'];
                 $start = date('Ymd', strtotime($_POST['start']));
                 $end = date('Ymd', strtotime($_POST['end']));
-                if ($_POST['start'] == $_POST['end']) {
-                    $rows = DB::select('SELECT id,keyword,ranking FROM word_'.$end.' WHERE siteid='.$_POST['siteid']);
-                } else {
-                    $rows = DB::select('SELECT ws.id,ws.keyword,ws.ranking FROM word_'.$end.' AS ws LEFT JOIN word_'.$start.' AS we ON we.keyword=ws.keyword AND we.siteid=ws.siteid WHERE ws.siteid='.$_POST['siteid'].' AND we.keyword IS NULL');
+
+                switch ($_POST['type']) {
+                    case 1:
+                        if ($_POST['start'] == $_POST['end']) {
+                            $rows = DB::select('SELECT id,keyword,ranking,url FROM word_'.$end.' WHERE siteid='.$_POST['siteid']);
+                        } else {
+                            $rows = DB::select('SELECT ws.id,ws.keyword,ws.ranking,ws.url FROM word_'.$end.' AS ws LEFT JOIN word_'.$start.' AS we ON we.keyword=ws.keyword AND we.siteid=ws.siteid WHERE ws.siteid='.$_POST['siteid'].' AND we.keyword IS NULL');
+                        }
+                        break;
+                    default:
+                        break;
                 }
+
 
                 $content->row((new Box('对比数据', new Table($headers, $rows)))->style('info')->solid());
             }
@@ -95,7 +103,7 @@ class WordController extends Controller
      * Make a grid builder.
      *
      * @return Grid
-     */
+
     protected function grid()
     {
         return Admin::grid(Word::class, function (Grid $grid) {
@@ -129,6 +137,7 @@ class WordController extends Controller
             }
         });
     }
+     * /
 
     /**
      * Make a form builder.
@@ -149,7 +158,7 @@ class WordController extends Controller
             $form->date('日期');
             $form->file('上传文件');
             $form->saving(function (Form $form) {
-                if ($_FILES['上传文件']['error']==0 && $_FILES['上传文件']['type'] == 'application/vnd.ms-excel' && $_POST['日期']) {
+                if ($_FILES['上传文件']['error']==0 && ($_FILES['上传文件']['type'] == 'application/vnd.ms-excel' || $_FILES['上传文件']['type'] == 'text/csv') && $_POST['日期']) {
                     if (DB::select('SELECT * FROM log WHERE siteid= ? AND d= ?', [$_POST['选择站点'], $_POST['日期']])) {
                         exit('当前站点日期下的数据已经提交过，请勿重复提交！');
                     }
@@ -157,24 +166,13 @@ class WordController extends Controller
                     move_uploaded_file($_FILES['上传文件']['tmp_name'], $files);
 
                     //解析cvs文件
-                    if (($handle = fopen($files, "r")) !== FALSE) {
-                        while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
-                            if (isset($data[1])  && is_numeric($data[1])) {
+                    if (file_exists($files)) {
+                        $id = DB::table('log')->insertGetId(['siteid'=>$_POST['选择站点'], 'd'=>$_POST['日期'], 'file'=>basename($files), 'created_at'=>time()]);
+                        dispatch((new InsertDbJobs($id))->onConnection('beanstalkd'));
 
-                                $keyword['name'] = @iconv('GBK', 'utf-8//TRANSLIT//IGNORE', $data[0]);
-                                $keyword['ranking'] = $data[1];
-                                //exit(var_dump($keyword));
-
-                                //入库
-                                $day = date('Ymd', strtotime($_POST['日期']));
-                                DB::statement('create table if not exists word_'.$day.' like word;');
-                                DB::insert('insert into word_'.$day.' (keyword, ranking, siteid, date) values (?, ?, ?, ?)', [$keyword['name'], $keyword['ranking'], $_POST['选择站点'], $_POST['日期']]);
-
-                            }
-                        }
-                        fclose($handle);
-                        DB::insert('insert into log (siteid, d, created_at) values (?, ?, ?)', [$_POST['选择站点'], $_POST['日期'], time()]);
-                        return redirect('/admin/');
+                        return redirect('/admin/logs');
+                    } else {
+                        exit('文件上传失败！');
                     }
                 } else {
                     exit('文件格式不正确或者参数不完整！');

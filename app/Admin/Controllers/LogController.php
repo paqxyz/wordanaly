@@ -47,6 +47,9 @@ class LogController extends Controller
 
             $grid->d('日期');
             $grid->created_at('导入时间');
+            $grid->status('导入状态')->value(function ($status) {
+                return $status ? '<span style="color: green">导入成功</span>' : '<span style="color: red">正在导入…</span>';
+            });
             $grid->disableCreation();
             $grid->disableBatchDeletion();
             $grid->disableActions();

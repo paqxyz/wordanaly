@@ -43,8 +43,8 @@ return [
 
         'beanstalkd' => [
             'driver' => 'beanstalkd',
-            'host' => 'localhost',
-            'queue' => 'default',
+            'host' => 'localhost:12143',
+            'queue' => 'insertdb',
             'retry_after' => 90,
         ],
 
