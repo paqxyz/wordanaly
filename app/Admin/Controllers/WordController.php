@@ -15,6 +15,7 @@ use Encore\Admin\Layout\Content;
 use App\Http\Controllers\Controller;
 use Encore\Admin\Controllers\ModelForm;
 use Encore\Admin\Widgets\Alert;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\MessageBag;
 
@@ -64,6 +65,8 @@ class WordController extends Controller
                 $headers = ['ID', '热词', '排名', '链接'];
                 $start = date('Ymd', strtotime($_POST['start']));
                 $end = date('Ymd', strtotime($_POST['end']));
+                //$page = $_POST['page'] ? $_POST['page'] : 1;
+                //$perPage = 50;
 
                 switch ($_POST['type']) {
                     case 1:
@@ -76,8 +79,7 @@ class WordController extends Controller
                     default:
                         break;
                 }
-
-
+                //$pages = new Paginator($rows, $perPage);
                 $content->row((new Box('对比数据', new Table($headers, $rows)))->style('info')->solid());
             }
         });
@@ -157,8 +159,13 @@ class WordController extends Controller
             });
             $form->date('日期');
             $form->file('上传文件');
+
+            //入库前逻辑
             $form->saving(function (Form $form) {
                 if ($_FILES['上传文件']['error']==0 && ($_FILES['上传文件']['type'] == 'application/vnd.ms-excel' || $_FILES['上传文件']['type'] == 'text/csv') && $_POST['日期']) {
+                    if (DB::select('SELECT * FROM log WHERE sourcefile= ? AND d= ?', [$_FILES['上传文件']['name'], $_POST['日期']])) {
+                        exit('当前文件已经提交过，请勿重复提交！');
+                    }
                     if (DB::select('SELECT * FROM log WHERE siteid= ? AND d= ?', [$_POST['选择站点'], $_POST['日期']])) {
                         exit('当前站点日期下的数据已经提交过，请勿重复提交！');
                     }
@@ -167,7 +174,7 @@ class WordController extends Controller
 
                     //解析cvs文件
                     if (file_exists($files)) {
-                        $id = DB::table('log')->insertGetId(['siteid'=>$_POST['选择站点'], 'd'=>$_POST['日期'], 'file'=>basename($files), 'created_at'=>time()]);
+                        $id = DB::table('log')->insertGetId(['siteid'=>$_POST['选择站点'], 'd'=>$_POST['日期'], 'file'=>basename($files), 'sourcefile'=>$_FILES['上传文件']['name'], 'created_at'=>time()]);
                         dispatch((new InsertDbJobs($id))->onConnection('beanstalkd'));
 
                         return redirect('/admin/logs');
