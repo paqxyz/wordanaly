@@ -15,5 +15,7 @@ Route::group([
     $router->resource('words', WordController::class);
     $router->post('/', 'WordController@index');
     $router->get('logs', 'LogController@index');
+    $router->get('ajaxlogdate', 'WordController@ajaxlogdate');
+    $router->get('test', 'WordController@test');
 
 });

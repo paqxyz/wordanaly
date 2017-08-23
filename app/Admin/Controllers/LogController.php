@@ -40,7 +40,7 @@ class LogController extends Controller
     protected function grid()
     {
         return Admin::grid(Log::class, function (Grid $grid) {
-            $grid->id('ID')->sortable();
+            $grid->id('ID')->sortable()->order('id DESC');
             $grid->siteid('站点')->value(function($siteid) {
                 return Site::find($siteid)->sitename;
             });

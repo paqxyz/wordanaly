@@ -52,7 +52,9 @@ class WordController extends Controller
             $content->row(function (Row $row) {
                 $row->column(12, function (Column $column) {
                     $form = new \Encore\Admin\Widgets\Form();
-                    $form->select('siteid', '站点')->options(Site::all()->pluck('sitename', 'id'));
+                    $form->select('siteid', '站点')->options(Site::all()->pluck('sitename', 'id'))
+                        ->load('start', '/admin/ajaxlogdate')
+                        ->load('end', '/admin/ajaxlogdate');
                     $form->select('start', '起始日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->pluck('d', 'd'));
                     $form->select('end', '结束日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->pluck('d', 'd'));
                     $form->select('type', '功能')->options([1=>'新增比对']);
@@ -73,11 +75,15 @@ class WordController extends Controller
                         if ($_POST['start'] == $_POST['end']) {
                             $rows = DB::select('SELECT id,keyword,ranking,url FROM word_'.$end.' WHERE siteid='.$_POST['siteid']);
                         } else {
-                            $rows = DB::select('SELECT ws.id,ws.keyword,ws.ranking,ws.url FROM word_'.$end.' AS ws LEFT JOIN word_'.$start.' AS we ON we.keyword=ws.keyword AND we.siteid=ws.siteid WHERE ws.siteid='.$_POST['siteid'].' AND we.keyword IS NULL');
+                            $rows = DB::select('SELECT ws.id,ws.keyword,ws.ranking,ws.url FROM word_'.$end.' AS ws LEFT JOIN word_'.$start.' AS we ON we.keyword=ws.keyword AND we.siteid=ws.siteid WHERE ws.siteid='.$_POST['siteid'].' AND we.keyword IS NULL ORDER BY ws.ranking ');
                         }
                         break;
                     default:
                         break;
+                }
+
+                foreach ($rows as $key=>$val) {
+                    $rows[$key]->url = '<a href="'.$val->url.'" target="_blank">'.$val->url.'</a>';
                 }
                 //$pages = new Paginator($rows, $perPage);
                 $content->row((new Box('对比数据', new Table($headers, $rows)))->style('info')->solid());
@@ -85,6 +91,11 @@ class WordController extends Controller
         });
     }
 
+    public function ajaxlogdate()
+    {
+        $siteid = $_GET['q'];
+        return json_encode(Log::where([['siteid','=', $siteid],['status','=',1]])->pluck('d', 'd'));
+    }
     /**
      * Create interface.
      *
@@ -187,5 +198,45 @@ class WordController extends Controller
             });
 
         });
+    }
+
+    //推送失败测试
+    public function test()
+    {
+        //补任务
+        dispatch((new InsertDbJobs(18))->onConnection('beanstalkd'));
+
+        /* 错误测试
+        $logs = DB::select('select * from log where id=?',[13]);
+        if ($logs) {
+            $log = $logs[0];
+            $files = config('filesystems.disks.admin.root').DIRECTORY_SEPARATOR.$log->file;
+
+            //解析cvs文件
+            if (($handle = fopen($files, "r")) !== FALSE) {
+                //创建新库
+                $day = date('Ymd', strtotime($log->d));
+                DB::statement('create table if not exists word_' . $day . ' like word;');
+                while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
+
+                        if (isset($data[1]) && isset($data[1])) {
+                            $keyword['name'] = @iconv('gb2312', 'utf-8//TRANSLIT//IGNORE', trim($data[0]));
+                            $keyword['ranking'] = @iconv('gb2312', 'utf-8//TRANSLIT//IGNORE', trim($data[1]));
+                            $keyword['url'] = isset($data[10]) ? @iconv('gb2312', 'utf-8//TRANSLIT//IGNORE', trim($data[10])) : ' ';
+                            $keyword['url'] = strlen($keyword['url'])>=200 ? substr($keyword['url'], 0, 199) : $keyword['url'];
+                            //if ($keyword['name'] == '学习软件免费下载') {
+                                echo $keyword['name'].'</br>';
+                            //}
+                            //入库
+                            if (!DB::select('select id from word_' . $day . ' where siteid=? and keyword=?', [$log->siteid, $keyword['name']])) {
+                                DB::insert('insert into word_' . $day . ' (keyword, ranking, url, siteid, date) values (?, ?, ?, ?, ?)', [$keyword['name'], $keyword['ranking'], $keyword['url'], $log->siteid, $log->d]);
+                            }
+                        }
+
+                }
+                DB::update('update log set status=1 where id=?', [13]);
+                fclose($handle);
+            }
+        }*/
     }
 }
