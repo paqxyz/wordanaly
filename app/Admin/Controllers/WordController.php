@@ -55,8 +55,8 @@ class WordController extends Controller
                     $form->select('siteid', '站点')->options(Site::all()->pluck('sitename', 'id'))
                         ->load('start', '/admin/ajaxlogdate')
                         ->load('end', '/admin/ajaxlogdate');
-                    $form->select('start', '起始日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->pluck('d', 'd'));
-                    $form->select('end', '结束日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->pluck('d', 'd'));
+                    $form->select('start', '起始日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->orderBy('d','desc')->pluck('d', 'd'));
+                    $form->select('end', '结束日期')->options(Log::where([['siteid','=', 1],['status','=',1]])->orderBy('d','desc')->pluck('d', 'd'));
                     $form->select('type', '功能')->options([1=>'新增比对']);
                     $form->action('/admin');
                     $column->append($form);
@@ -73,9 +73,9 @@ class WordController extends Controller
                 switch ($_POST['type']) {
                     case 1:
                         if ($_POST['start'] == $_POST['end']) {
-                            $rows = DB::select('SELECT id,keyword,ranking,url FROM word_'.$end.' WHERE siteid='.$_POST['siteid']);
+                            $rows = DB::select('SELECT id,keyword,ranking,url FROM word_'.$end.' WHERE siteid='.$_POST['siteid'].' limit 1000');
                         } else {
-                            $rows = DB::select('SELECT ws.id,ws.keyword,ws.ranking,ws.url FROM word_'.$end.' AS ws LEFT JOIN word_'.$start.' AS we ON we.keyword=ws.keyword AND we.siteid=ws.siteid WHERE ws.siteid='.$_POST['siteid'].' AND we.keyword IS NULL ORDER BY ws.ranking ');
+                            $rows = DB::select('SELECT ws.id,ws.keyword,ws.ranking,ws.url FROM word_'.$end.' AS ws LEFT JOIN word_'.$start.' AS we ON we.keyword=ws.keyword AND we.siteid=ws.siteid WHERE ws.siteid='.$_POST['siteid'].' AND we.keyword IS NULL ORDER BY ws.ranking limit 1000');
                         }
                         break;
                     default:
@@ -94,7 +94,7 @@ class WordController extends Controller
     public function ajaxlogdate()
     {
         $siteid = $_GET['q'];
-        return json_encode(Log::where([['siteid','=', $siteid],['status','=',1]])->pluck('d', 'd'));
+        return json_encode(Log::where([['siteid','=', $siteid],['status','=',1]])->orderBy('d','desc')->pluck('d', 'd'));
     }
     /**
      * Create interface.
@@ -204,7 +204,10 @@ class WordController extends Controller
     public function test()
     {
         //补任务
-        dispatch((new InsertDbJobs(18))->onConnection('beanstalkd'));
+        for ($i=38; $i<=64; $i++) {
+            dispatch((new InsertDbJobs($i))->onConnection('beanstalkd'));
+        }
+       // dispatch((new InsertDbJobs(37))->onConnection('beanstalkd'));
 
         /* 错误测试
         $logs = DB::select('select * from log where id=?',[13]);

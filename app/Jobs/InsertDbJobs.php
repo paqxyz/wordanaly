@@ -46,10 +46,10 @@ class InsertDbJobs implements ShouldQueue
                 DB::statement('create table if not exists word_' . $day . ' like word;');
                 while (($data = fgetcsv($handle, 1000, ",")) !== FALSE) {
                     try{
-                        if (isset($data[1]) && isset($data[1])) {
+                        if (isset($data[1]) && $data[1]!='百度排名') {
                             $keyword['name'] = @iconv('gb2312', 'utf-8//TRANSLIT//IGNORE', trim($data[0]));
                             $keyword['ranking'] = @iconv('gb2312', 'utf-8//TRANSLIT//IGNORE', trim($data[1]));
-                            $keyword['ranking'] = $keyword['ranking']=='100以外' ? 1000 : intValue($keyword['ranking']);
+                            $keyword['ranking'] = $keyword['ranking']=='100以外' ? 1000 : intval($keyword['ranking']);
                             $keyword['url'] = isset($data[10]) ? @iconv('gb2312', 'utf-8//TRANSLIT//IGNORE', trim($data[10])) : ' ';
                             $keyword['url'] = strlen($keyword['url'])>=200 ? substr($keyword['url'], 0, 199) : $keyword['url'];
                             //入库
